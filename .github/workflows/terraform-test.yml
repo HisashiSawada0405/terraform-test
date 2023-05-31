@@ -26,11 +26,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Configure AWS credentials for local env
-        uses: aws-actions/configure-aws-credentials@v1
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/crd-dev-github-actions-terraform-plan
-          role-session-name: github-actions-terraform-plan
           aws-region: ${{ env.AWS_REGION }}
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}  # 開発環境は今のところ自分のIAMのアクセスキーを利用しているため
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
