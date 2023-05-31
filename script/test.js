@@ -3,15 +3,23 @@ import { Octokit } from '@octokit/rest';
 // Octokit.js
 // https://github.com/octokit/core.js#readme
 const octokit = new Octokit({
-    auth: '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'
+    auth: ''
 })
 
-const response = await octokit.request('GET /repos/{owner}/{repo}/pulls', {
+const list_pr = await octokit.request('GET /repos/{owner}/{repo}/pulls', {
     owner: 'HisashiSawada0405',
     repo: 'terraform-test',
-    headers: {
-        'X-GitHub-Api-Version': '2022-11-28'
-    }
+    state: 'open',
+    head: 'HisashiSawada0405:main'
 })
 
-console.log(response)
+console.log(list_pr.status)
+console.log(list_pr.data)
+
+console.log(list_pr.length)
+
+if (list_pr.data.length) {
+    console.log("true.")
+}else{
+    console.log("false.")
+}

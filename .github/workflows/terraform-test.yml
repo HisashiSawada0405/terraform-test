@@ -65,7 +65,13 @@ jobs:
           cat terraform_plan.txt
         continue-on-error: true
 
-      - name: Update Pull Request
+      - name: Upload plan result as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: terraform_plan
+          path: terraform/environments/dev/terraform_plan.txt
+
+      - name: Update Pull Request if exists
         uses: actions/github-script@v6
         env:
           PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
@@ -78,37 +84,29 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              head: `${context.repo.owner}:${context.ref.replace('refs/heads/', '')}`
+              head: `${context.repo.owner}:${{ github.event.inputs.target_branch }}`
             })
             
-            if (typeof issues.data === "undefined") {
-              const pr = await github.rest.pulls.create({
+            // create comment if pull request exists
+            if (issues.data.length) {
+              const pr_number = context.issue.number || issues.data[0].number
+
+              // create comment
+              const output = `#### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+              <details><summary>Show Plan</summary>
+  
+              \`\`\`\n
+              ${process.env.PLAN}
+              \`\`\`
+  
+              </details>
+  
+              *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+  
+              github.rest.issues.createComment({
+                issue_number: pr_number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                head: `${context.repo.owner}:${context.ref.replace('refs/heads/', '')}`,
-                base: `${{ github.event.inputs.target_branch }}`
-               title: test
+                body: output
               })
-              const pr_number = pr.data[0].number
-            } else {
-              const pr_number = context.issue.number || issues.data[0].number
             }
-
-            // create comment
-            const output = `#### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-            <details><summary>Show Plan</summary>
-
-            \`\`\`\n
-            ${process.env.PLAN}
-            \`\`\`
-
-            </details>
-
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-
-            github.rest.issues.createComment({
-              issue_number: pr_number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
