@@ -35,6 +35,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Set current datetime as env variable
+        run: echo "CURRENT_DATETIME=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -68,15 +71,27 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
-          terraform plan -no-color > terraform_plan.txt
-          cat terraform_plan.txt
+          terraform plan -no-color -out tfplan_${{ env.CURRENT_DATETIME }} > tfplan.log
+          cat tfplan.log
         continue-on-error: true
 
       - name: Upload plan result as artifact
         uses: actions/upload-artifact@v3
         with:
+          name: tfplan_${{ env.CURRENT_DATETIME }}
+          path: ${{ env.WORKING_DIRECTORY }}/tfplan_${{ env.CURRENT_DATETIME }}
+
+      - name: Upload plan log as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan.log
+          path: ${{ env.WORKING_DIRECTORY }}/tfplan.log
+
+      - name: Upload whole as artifact
+        uses: actions/upload-artifact@v3
+        with:
           name: terraform_plan
-          path: terraform/environments/dev/terraform_plan.txt
+          path: ${{ env.WORKING_DIRECTORY }}/tfplan*
 
       - name: Update Pull Request if exists
         uses: actions/github-script@v6
