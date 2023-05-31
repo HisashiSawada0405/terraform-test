@@ -61,32 +61,7 @@ jobs:
         run: terraform plan -no-color
         continue-on-error: true
 
-      - name: Update Pull Request for local env
-        if: ${{ env.ACT }}   # PRへのコメント書き込みについては、ローカル開発環境（act）では echo で表示する
-        uses: actions/github-script@v6
-        env:
-          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const output = `#### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-
-            <details><summary>Show Plan</summary>
-
-            \`\`\`\n
-            ${process.env.PLAN}
-            \`\`\`
-
-            </details>
-
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
-
-            return output
-      - name: test output
-        run: echo ${{ steps.plan.outputs.stdout }}  # TODO: ローカルだと plan 結果が表示されないのは別途調査
-
       - name: Update Pull Request
-        if: ${{ !env.ACT }}   # PRへのコメント書き込みについては、ローカル開発環境（act）では実施しない
         uses: actions/github-script@v6
         env:
           PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
