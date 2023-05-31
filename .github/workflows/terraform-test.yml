@@ -2,9 +2,6 @@ name: terraform plan
 
 on:
   workflow_dispatch:   # 一旦、手動にする
-#  pull_request:
-#    branches:
-#      - "develop"
 
 env:
   TERRAFORM_VERSION: 1.3.6  # .terraform-version と同じ
