@@ -2,7 +2,7 @@
 #   対象ブランチの対象ディレクトリで terraform plan を実行し、結果を artifact としてアップロードする
 #   対象ブランチの pull request が open の場合、 pull request に plan 結果をコメントとして書き込む
 
-name: terraform plan
+name: terraform plan and apply
 
 on:
   workflow_dispatch:
@@ -16,6 +16,10 @@ on:
       environment:
         description: 'Environment to run tests against'
         type: environment
+        required: true
+      plan_only:
+        description: 'run only terraform plan'
+        type: boolean
         required: true
 
 env:
@@ -144,6 +148,7 @@ jobs:
 
   terraform-apply:
     needs: terraform-plan
+    if: ${{ !github.event.inputs.plan_only }}
     environment:
       name: ${{ github.event.inputs.environment }}
     permissions: write-all
@@ -248,3 +253,7 @@ jobs:
                 body: output
               })
             }
+
+      - name: Exit finally if apply failed
+        if: steps.apply.outcome == 'failure'
+        run: exit 1
