@@ -124,7 +124,7 @@ jobs:
   
               </details>
   
-              *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, URL: [${{ github.workflow }}](https://${{ env.BUILD_URL }})*`;
+              *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, URL: [${{ github.workflow }}](${{ env.BUILD_URL }})*`;
   
               github.rest.issues.createComment({
                 issue_number: pr_number,
@@ -248,7 +248,7 @@ jobs:
             
               </details>
             
-              *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, URL: [${{ github.workflow }}](https://${{ env.BUILD_URL }})*`;
+              *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, URL: [${{ github.workflow }}](${{ env.BUILD_URL }})*`;
             
               github.rest.issues.createComment({
                 issue_number: pr_number,

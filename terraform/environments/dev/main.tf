@@ -12,11 +12,6 @@ resource "aws_s3_bucket_public_access_block" "test" {
   restrict_public_buckets = true
 }
 
-resource "aws_s3_bucket_acl" "test" {
-  bucket = aws_s3_bucket.test.id
-  acl    = "private"
-}
-
 # tfsec:ignore:aws-s3-encryption-customer-key  一旦AES256にするため無視する
 resource "aws_s3_bucket_server_side_encryption_configuration" "test" {
   bucket = aws_s3_bucket.test.bucket
