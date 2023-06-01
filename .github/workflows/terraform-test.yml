@@ -82,26 +82,14 @@ jobs:
       - name: Terraform Plan
         id: plan
         run: |
-          terraform plan -no-color -out tfplan_${{ env.CURRENT_DATETIME }} -input=false > tfplan_${{ env.CURRENT_DATETIME }}.log 2>&1
+          terraform plan -no-color -out tfplan_${{ env.CURRENT_DATETIME }} -input=false > tfplan_${{ env.CURRENT_DATETIME }}.log
           cat tfplan_${{ env.CURRENT_DATETIME }}.log
         continue-on-error: true
-
-      - name: Upload plan result as artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: tfplan_${{ env.CURRENT_DATETIME }}
-          path: ${{ env.WORKING_DIRECTORY }}/tfplan_${{ env.CURRENT_DATETIME }}
-
-      - name: Upload plan log as artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: tfplan_${{ env.CURRENT_DATETIME }}.log
-          path: ${{ env.WORKING_DIRECTORY }}/tfplan_${{ env.CURRENT_DATETIME }}.log
 
       - name: Update Pull Request if exists
         uses: actions/github-script@v6
         env:
-          PLAN: "${{ steps.plan.outputs.stdout }}"
+          PLAN: "${{ steps.plan.outputs.stdout }}\n${{ steps.plan.outputs.stderr }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -137,6 +125,22 @@ jobs:
                 body: output
               })
             }
+
+      - name: Upload plan result as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan_${{ env.CURRENT_DATETIME }}
+          path: ${{ env.WORKING_DIRECTORY }}/tfplan_${{ env.CURRENT_DATETIME }}
+
+      - name: Upload plan log as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan_${{ env.CURRENT_DATETIME }}.log
+          path: ${{ env.WORKING_DIRECTORY }}/tfplan_${{ env.CURRENT_DATETIME }}.log
+
+      - name: Exit finally if plan failed
+        if: ${{ steps.plan.outcome }} == "failure"
+        run: exit 1
 
   terraform-apply:
     needs: terraform-plan
@@ -195,7 +199,7 @@ jobs:
       - name: Terraform Apply
         id: apply
         run: |
-          terraform apply -no-color -input=false tfplan_${{ env.CURRENT_DATETIME }} > tfapply_${{ env.CURRENT_DATETIME }}.log 2>&1
+          terraform apply -no-color -input=false tfplan_${{ env.CURRENT_DATETIME }} > tfapply_${{ env.CURRENT_DATETIME }}.log
           cat tfapply_${{ env.CURRENT_DATETIME }}.log
         continue-on-error: true
 
