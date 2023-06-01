@@ -208,7 +208,7 @@ jobs:
       - name: Update Pull Request if exists
         uses: actions/github-script@v6
         env:
-          APPLY: "${{ steps.apply.outputs.stdout }}"
+          APPLY: "${{ steps.apply.outputs.stdout }}\n${{ steps.apply.outputs.stderr }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
