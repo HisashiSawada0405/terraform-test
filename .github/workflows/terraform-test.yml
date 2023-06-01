@@ -151,7 +151,7 @@ jobs:
 
   terraform-apply:
     needs: terraform-plan
-    if: github.event.inputs.plan_only == 'no'
+    if: github.event.inputs.plan_only == 'both plan and apply'
     environment:
       name: ${{ github.event.inputs.environment }}
     permissions: write-all
