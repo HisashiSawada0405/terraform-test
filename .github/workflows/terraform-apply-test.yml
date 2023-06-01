@@ -13,18 +13,22 @@ on:
       target_terraform_directory:
         description: 'target terraform directory (ex. terraform/environments/dev)'
         required: true
+      target_tfplan:
+        description: 'target tfplan (ex. tfplan_2023-05-31_08-52-14)'
+        required: true
 
 env:
   TERRAFORM_VERSION: 1.3.6  # .terraform-version と同じ
   WORKING_DIRECTORY: ${{ github.event.inputs.target_terraform_directory }}
   AWS_REGION: ap-northeast-1
+  TZ: 'Asia/Tokyo'
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  terraform-plan:
+  terraform-apply:
     permissions: write-all
     defaults:
       run:
@@ -34,6 +38,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Set current datetime as env variable
+        run: echo "CURRENT_DATETIME=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -63,14 +70,63 @@ jobs:
 
       - name: Terraform Init
         id: init
-        run: terraform init
+        run: terraform init -input=false
 
       - name: Download plan result
         uses: actions/download-artifact@v3
         with:
-          name: terraform_plan
+          name: ${{ github.event.inputs.target_tfplan }}
+          path: ${{ env.WORKING_DIRECTORY }}
 
-      - name: Display structure of downloaded files
+      - name: Terraform Apply
+        id: apply
         run: |
-          ls -R
-          cat terraform_plan.txt
+          terraform apply -no-color -input=false ${{ github.event.inputs.target_tfplan }} > tfapply_${{ env.CURRENT_DATETIME }}.log 2>&1
+          cat tfapply_${{ env.CURRENT_DATETIME }}.log
+        continue-on-error: true
+
+      - name: Upload apply log as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfapply_${{ env.CURRENT_DATETIME }}.log
+          path: ${{ env.WORKING_DIRECTORY }}/tfapply_${{ env.CURRENT_DATETIME }}.log
+
+      - name: Update Pull Request if exists
+        uses: actions/github-script@v6
+        env:
+          APPLY: "${{ steps.apply.outputs.stdout }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Retrieve context.issue.number for selected branch
+            // https://github.com/actions/github-script/issues/203
+            const issues = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              head: `${context.repo.owner}:${{ github.event.inputs.target_branch }}`
+            })
+            
+            // create comment if pull request exists
+            if (issues.data.length) {
+              const pr_number = context.issue.number || issues.data[0].number
+
+              // create comment
+              const output = `#### Terraform Apply 🏗 \`${{ steps.apply.outcome }}\`
+              <details><summary>Show Apply</summary>
+            
+              \`\`\`\n
+              ${process.env.APPLY}
+              \`\`\`
+            
+              </details>
+            
+              *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            
+              github.rest.issues.createComment({
+                issue_number: pr_number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
