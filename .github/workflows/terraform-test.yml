@@ -36,12 +36,18 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKING_DIRECTORY }}
     runs-on: ubuntu-latest
+    outputs:
+      current_datetime: ${{ steps.current_datetime.outputs.value }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Set current datetime as env variable
         run: echo "CURRENT_DATETIME=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
+
+      - name: Output current datetime for next job
+        id: current_datetime
+        run: echo "value=${{ env.CURRENT_DATETIME }}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -145,6 +151,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Set current datetime as env variable
+        id: current_datetime
+        run: echo "CURRENT_DATETIME=${{ needs.terraform-plan.outputs.current_datetime }}" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
