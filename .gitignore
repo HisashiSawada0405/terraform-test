@@ -211,3 +211,6 @@ Temporary Items
 
 # ignore .secrets for act
 *.secrets
+
+node_modules
+script/1

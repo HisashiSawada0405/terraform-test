@@ -1,12 +1,36 @@
-name: terraform plan
+# terraform-test.yml
+#   対象ブランチの対象ディレクトリで terraform plan を実行し、結果を artifact としてアップロードする
+#   対象ブランチの pull request が open の場合、 pull request に plan 結果をコメントとして書き込む
+
+name: terraform plan and apply
 
 on:
-  workflow_dispatch:   # 一旦、手動にする
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'target branch (ex. feature/KP-0000)'
+        required: true
+      target_terraform_directory:
+        description: 'target terraform directory (ex. terraform/environments/dev)'
+        required: true
+      environment:
+        description: 'Environment to run tests against'
+        type: environment
+        required: true
+      plan_only:
+        description: 'run only terraform plan'
+        type: choice
+        options:
+          - only plan
+          - both plan and apply
+        required: true
 
 env:
+  BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
   TERRAFORM_VERSION: 1.3.6  # .terraform-version と同じ
-  WORKING_DIRECTORY: terraform/environments/dev
+  WORKING_DIRECTORY: ${{ github.event.inputs.target_terraform_directory }}
   AWS_REGION: ap-northeast-1
+  TZ: 'Asia/Tokyo'
 
 permissions:
   id-token: write
@@ -20,9 +44,18 @@ jobs:
         shell: bash
         working-directory: ${{ env.WORKING_DIRECTORY }}
     runs-on: ubuntu-latest
+    outputs:
+      current_datetime: ${{ steps.current_datetime.outputs.value }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
+      - name: Set current datetime as env variable
+        run: echo "CURRENT_DATETIME=$(date +'%Y-%m-%d_%H-%M-%S')" >> $GITHUB_ENV
+
+      - name: Output current datetime for next job
+        id: current_datetime
+        run: echo "value=${{ env.CURRENT_DATETIME }}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
@@ -41,7 +74,7 @@ jobs:
           echo 'plugin_cache_dir="$HOME/.terraform.d/plugin-cache"' >~/.terraformrc
           mkdir --parents ~/.terraform.d/plugin-cache
 
-      - name: Cache Terraform  # ローカル開発環境ではCacheは動作しない
+      - name: Cache Terraform
         uses: actions/cache@v3
         with:
           path: |
@@ -52,19 +85,19 @@ jobs:
 
       - name: Terraform Init
         id: init
-        run: terraform init
+        run: terraform init -input=false
 
       - name: Terraform Plan
         id: plan
         run: |
-          terraform plan -no-color > terraform_plan.txt
-          cat terraform_plan.txt
+          terraform plan -no-color -out tfplan_${{ env.CURRENT_DATETIME }} -input=false > tfplan_${{ env.CURRENT_DATETIME }}.log
+          cat tfplan_${{ env.CURRENT_DATETIME }}.log
         continue-on-error: true
 
-      - name: Update Pull Request
+      - name: Update Pull Request if exists
         uses: actions/github-script@v6
         env:
-          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+          PLAN: "${{ steps.plan.outputs.stdout }}\n${{ steps.plan.outputs.stderr }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -74,26 +107,157 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              head: `${context.repo.owner}:${context.ref.replace('refs/heads/', '')}`
+              head: `${context.repo.owner}:${{ github.event.inputs.target_branch }}`
             })
-            const pr = context.issue.number || issues.data[0].number
             
-            // create comment
-            const output = `#### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+            // create comment if pull request exists
+            if (issues.data.length) {
+              const pr_number = context.issue.number || issues.data[0].number
 
-            <details><summary>Show Plan</summary>
+              // create comment
+              const output = `#### Terraform Plan 📖 \`${{ steps.plan.outcome }}\`
+              <details><summary>Show Plan</summary>
+  
+              \`\`\`\n
+              ${process.env.PLAN}
+              \`\`\`
+  
+              </details>
+  
+              *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Link: [${{ github.workflow }}](${{ env.BUILD_URL }})*`;
+  
+              github.rest.issues.createComment({
+                issue_number: pr_number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
 
-            \`\`\`\n
-            ${process.env.PLAN}
-            \`\`\`
+      - name: Upload plan result as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan_${{ env.CURRENT_DATETIME }}
+          path: ${{ env.WORKING_DIRECTORY }}/tfplan_${{ env.CURRENT_DATETIME }}
 
-            </details>
+      - name: Upload plan log as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfplan_${{ env.CURRENT_DATETIME }}.log
+          path: ${{ env.WORKING_DIRECTORY }}/tfplan_${{ env.CURRENT_DATETIME }}.log
 
-            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+      - name: Exit finally if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
 
-            github.rest.issues.createComment({
-              issue_number: pr,
+  terraform-apply:
+    needs: terraform-plan
+    if: github.event.inputs.plan_only == 'both plan and apply'
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    permissions: write-all
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set current datetime as env variable
+        id: current_datetime
+        run: echo "CURRENT_DATETIME=${{ needs.terraform-plan.outputs.current_datetime }}" >> $GITHUB_ENV
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Config Terraform plugin cache
+        run: |
+          echo 'plugin_cache_dir="$HOME/.terraform.d/plugin-cache"' >~/.terraformrc
+          mkdir --parents ~/.terraform.d/plugin-cache
+
+      - name: Cache Terraform
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -input=false
+
+      - name: Download plan result
+        uses: actions/download-artifact@v3
+        with:
+          name: tfplan_${{ env.CURRENT_DATETIME }}
+          path: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Terraform Apply
+        id: apply
+        run: |
+          terraform apply -no-color -input=false tfplan_${{ env.CURRENT_DATETIME }} > tfapply_${{ env.CURRENT_DATETIME }}.log
+          cat tfapply_${{ env.CURRENT_DATETIME }}.log
+        continue-on-error: true
+
+      - name: Upload apply log as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: tfapply_${{ env.CURRENT_DATETIME }}.log
+          path: ${{ env.WORKING_DIRECTORY }}/tfapply_${{ env.CURRENT_DATETIME }}.log
+
+      - name: Update Pull Request if exists
+        uses: actions/github-script@v6
+        env:
+          APPLY: "${{ steps.apply.outputs.stdout }}\n${{ steps.apply.outputs.stderr }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            // Retrieve context.issue.number for selected branch
+            // https://github.com/actions/github-script/issues/203
+            const issues = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: output
+              state: 'open',
+              head: `${context.repo.owner}:${{ github.event.inputs.target_branch }}`
             })
+            
+            // create comment if pull request exists
+            if (issues.data.length) {
+              const pr_number = context.issue.number || issues.data[0].number
+
+              // create comment
+              const output = `#### Terraform Apply 🏗 \`${{ steps.apply.outcome }}\`
+              <details><summary>Show Apply</summary>
+            
+              \`\`\`\n
+              ${process.env.APPLY}
+              \`\`\`
+            
+              </details>
+            
+              *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Link: [${{ github.workflow }}](${{ env.BUILD_URL }})*`;
+            
+              github.rest.issues.createComment({
+                issue_number: pr_number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              })
+            }
+
+      - name: Exit finally if apply failed
+        if: steps.apply.outcome == 'failure'
+        run: exit 1

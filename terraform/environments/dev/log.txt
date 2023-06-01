@@ -1,0 +1,9 @@
+aws_s3_bucket.test: Creating...
+
+Error: creating Amazon S3 (Simple Storage) Bucket (sawada-t4-test): BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it.
+	status code: 409, request id: 12NMNZ1CC5MPNX81, host id: ChV+MuS8NGfiPZZjEQK0qYuCXIAe/IiIufhvK+ok/EpHZcSW/9Qvurnn0CLNYKpW1n10fv91ORk=
+
+  with aws_s3_bucket.test,
+  on main.tf line 1, in resource "aws_s3_bucket" "test":
+   1: resource "aws_s3_bucket" "test" {
+

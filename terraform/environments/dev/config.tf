@@ -6,6 +6,12 @@ terraform {
       version = "~> 4.44.0" # config.tf ファイル作成時の最新バージョンを指定
     }
   }
+  backend "s3" {
+    bucket  = "kakin-dev-tfstate"
+    key     = "test.state"
+    region  = "ap-northeast-1"
+    encrypt = true
+  }
 }
 
 provider "aws" {
