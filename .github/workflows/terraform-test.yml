@@ -21,8 +21,8 @@ on:
         description: 'run only terraform plan'
         type: choice
         options:
-          - yes
-          - no
+          - only plan
+          - both plan and apply
         required: true
 
 env:
