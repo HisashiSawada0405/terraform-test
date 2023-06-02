@@ -62,4 +62,13 @@ jobs:
               --change-request-name MyChangeRequest \
               --document-name AWS-HelloWorldChangeTemplate \
               --runbooks '[{"DocumentName": "AWS-HelloWorld","Parameters": {"AutomationAssumeRole": ["arn:aws:iam::413564730959:role/kakin-ssm-full-access-test"]}}]' \
-              --parameters Approver="kakin-ssm-full-access-test",ApproverType="IamRole",ApproverSnsTopicArn="arn:aws:sns:ap-northeast-1:413564730959:kakin-approval-test"
+              --parameters Approver="kakin-ssm-full-access-test",ApproverType="IamRole",ApproverSnsTopicArn="arn:aws:sns:ap-northeast-1:413564730959:kakin-approval-test" \
+              --query "AutomationExecutionId" --output text
+
+      - name: Check if change request approved
+        run: |
+          while [ $(aws ssm get-automation-execution --automation-execution-id ${{ steps.create-change-request.output.stdout }} \
+                    --query "AutomationExecution.AutomationExecutionStatus" --output text) != "CompletedWithSuccess" ]; \
+            sleep 5; \
+          done
+          
