@@ -57,7 +57,8 @@ jobs:
           sudo /tmp/aws/install --update
           rm -rf /tmp/aws/
 
-      - run: |
+      - id: create-change-request
+        run: |
           aws ssm start-change-request-execution \
               --change-request-name MyChangeRequest \
               --document-name AWS-HelloWorldChangeTemplate \
@@ -70,4 +71,4 @@ jobs:
           while [ $(aws ssm get-automation-execution --automation-execution-id ${{ steps.create-change-request.outputs.stdout }} \
                     --query "AutomationExecution.AutomationExecutionStatus" --output text) != "CompletedWithSuccess" ]; \
             sleep 5; \
-          done;
+          done
