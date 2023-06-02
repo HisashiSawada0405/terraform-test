@@ -68,8 +68,10 @@ jobs:
 
       - name: Check if change request approved
         run: |
-          while [ "$(aws ssm get-automation-execution --automation-execution-id ${{ env.execution_id }} \
-                    --query \"AutomationExecution.AutomationExecutionStatus\" --output text)" != "CompletedWithSuccess" ]; \
+          response="none"; \
+          while [ "$response" != "CompletedWithSuccess" ]; \
           do \
             sleep 5; \
+            response=$(aws ssm get-automation-execution --automation-execution-id ${{ env.execution_id }} \
+                    --query \"AutomationExecution.AutomationExecutionStatus\" --output text)"; \
           done
